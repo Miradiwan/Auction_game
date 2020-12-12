@@ -1,6 +1,6 @@
 import numpy as np
 import random
-
+from copy import copy
 
 class Bidder(object):
 
@@ -52,6 +52,9 @@ def english_auction(bidders, delta, initial_price):
 def tournament_select(pop, p_tour, tour_size):
     iSelected = None
 
+
+    if tour_size > len(pop):
+        return None
     #chose N individuals randomly and sort them by fitness
     selected_ind = [random.choice(pop) for _ in range(tour_size)]
     selected_ind.sort(key=lambda x:x.fitness, reverse=True)
@@ -108,13 +111,13 @@ def mutate_strategy(individual, p_mut):
 
 
 def main(num_items, num_rounds, num_players):
-    generations = 1000
+    generations = 100
 
     budget = 2*100
     p_tour = 0.75
     tour_size = 2
     p_mut = 0.05
-    p_cossover = 0.7
+    p_cossover = 0
 
     #Create players/bidders
     bidders = []
@@ -143,16 +146,26 @@ def main(num_items, num_rounds, num_players):
                 best_strategy = bidder.strategy.copy()
 
         #Tournament selection and crossover
-        for i in range(0, num_players, 2):
-            i1 = tournament_select(bidders, p_tour, tour_size)
-            i2 = tournament_select(bidders, p_tour, tour_size)
+        for i in range(0, num_players):
+            i1 = copy(bidders[i])
+            mutate_strategy(bidders[i], p_mut)
+            #i2 = tournament_select([i1, bidders[i] ], p_tour, tour_size)
+            p = english_auction(bidders, 10, 10)
+            f = bidders[i].fitness_eval(p[i,:])
+
+            #if np.random.uniform() < p_tour:
+            if  i1.fitness > f:
+                bidders[i] = i1
+
 
             if random.uniform(0, 1) < p_cossover:
                 crossover(i1, i2)       #done in place
+            else:
+                pass
 
         #mutations
-        for bidder in bidders:
-            mutate_strategy(bidder, p_mut)
+    #    for bidder in bidders:
+    #        mutate_strategy(bidder, p_mut)
 
         #Elitism
         bidders[best_bidder_id].strategy = best_strategy
@@ -161,6 +174,6 @@ def main(num_items, num_rounds, num_players):
         print(best_ind.private_eval)
         print(best_ind.strategy)
         print("----")
-
+    print(p)
 if __name__ == "__main__":
-    main(5, 100, 10)
+    main(5, 100, 20)
