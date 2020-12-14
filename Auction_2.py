@@ -15,17 +15,63 @@ class Bidder(object):
         self.irrationality = np.random.uniform(0, p_irrationality)
         self.budget = budget
 
-        self.item_prio = self.prioritize_item()
         self.name = self._generate_id()
 
-        print(self.item_prio)
-    def prioritize_item(self):
+        self.chosen_items = self.roulette(self.private_eval.copy(), self.budget)
+
+    def roulette(self, eval_items, available_budget):
+        chosen_item = []
+
+        priv_items = self.prioritize_item(eval_items)
+
+        prioritized_item = sorted(priv_items.items(), key=lambda kv: kv[1], reverse=True)
+
+
+        while available_budget > 0 and len(chosen_item) != len(self.private_eval):
+
+            if self.check_budget(available_budget, eval_items) == False:
+                break
+
+            s = 0
+            r = np.random.uniform()
+
+
+            for item in prioritized_item:
+                k, v = item
+                s += v
+
+                if r < s:
+
+                    if available_budget - self.private_eval[k] < 0:
+                        break
+
+                    #print("prob r : {:.2f} s : {:.2f} v : {:.2f}".format(r,s,v))
+                    eval_items.pop(k, None)
+                    priv_items = self.prioritize_item(eval_items)
+                    prioritized_item = sorted(priv_items.items(), key = lambda kv: kv[1], reverse=True)
+                    chosen_item.append(k)
+                    available_budget -= self.private_eval[k]
+                    break
+
+        return chosen_item
+
+    def check_budget(self, available_budget, priv_items):
+
+
+        for k,v in priv_items.items():
+
+            if available_budget > v:
+                return True
+
+        return False
+
+    def prioritize_item(self, priv_eval):
         #Idea: to prioritize items with higher values
-        d = sum( self.private_eval.values() )
+        d = sum( priv_eval.values() )
 
         item_prio = dict()
-        for k, v in self.private_eval.items():
-            item_prio[k] = 1 - v/d
+        for k, v in priv_eval.items():
+            item_prio[k] = v/d
 
         return item_prio
 
@@ -36,21 +82,25 @@ class Bidder(object):
         """
 
 
+        if item_name not in self.chosen_items:
+            return False
 
-        if self.budget <= 0:
-            return 0
+
 
         if asking_price < self.private_eval[item_name]:
             ## TODO: The bidder should also try to manage his budget
             ## by prioritizing which item he whishes to buy
-            return 1
+            return True
 
         if asking_price > self.private_eval[item_name]:
+            #return False
+
             r = np.random.uniform()
+
             if r < self.irrationality:
-                return 1
+                return True
             else:
-                return 0
+                return False
 
 
     def __repr__(self):
@@ -83,8 +133,6 @@ class Auction_Items(object):
         self.highest_eval = bidders[0].private_eval[self.name]
         self.second_highest_eval = bidders[1].private_eval[self.name]
 
-
-
 def english_auction(bidders, Auction_Items, initial_bid, incremental_bid):
 
     for it in Auction_Items:
@@ -107,9 +155,6 @@ def english_auction(bidders, Auction_Items, initial_bid, incremental_bid):
 
             asking_price += incremental_bid
 
-
-
-
 def main(num_items, num_bidders, budget):
 
     auc_items = [Auction_Items() for _ in range(num_items)]
@@ -124,9 +169,14 @@ def main(num_items, num_bidders, budget):
     for it in auc_items:
         print(it.name, it.sold_to.name, it.highest_eval, it.sold_for, it.second_highest_eval)
 
+    for bidder in bidders:
+        print(bidder.name)
+        print(bidder.chosen_items)
+        print(bidder.private_eval)
+
 if __name__ == "__main__":
     num_bidders = 10
     num_items = 5
-    budget = 500
+    budget = 250
 
     main(num_items, num_bidders, budget)

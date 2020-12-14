@@ -174,6 +174,6 @@ def main(num_items, num_rounds, num_players):
         print(best_ind.private_eval)
         print(best_ind.strategy)
         print("----")
-    print(p)
+    print(p )
 if __name__ == "__main__":
     main(5, 100, 20)
