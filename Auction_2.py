@@ -2,6 +2,14 @@ import numpy as np
 import random
 from string import ascii_uppercase
 import matplotlib.pyplot as plt
+
+
+'''
+    # TODO:
+    Add Dutch auction
+    Add multiple round logic
+    Change object for each round ??
+'''
 class Bidder(object):
 
     def __init__(self, budget, auction_Items, lower_eval = 10,
