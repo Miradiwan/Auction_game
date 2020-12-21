@@ -3,6 +3,7 @@ import random
 from string import ascii_uppercase
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from itertools import count
 
 '''
     # TODO:
@@ -10,16 +11,29 @@ from matplotlib.animation import FuncAnimation
     Add multiple round logic
     Change object for each round ??
 '''
+
+plt.style.use('fivethirtyeight')
+
+
+#-------Global Variabls-------------#
+num_bidders = 10
+num_items = 5
+budget = 200
+num_iter = 100
+initial_bid = 10
+incremental_bid = 1
+#-----Global Variabls----------------#
+
 class Bidder(object):
 
     def __init__(self, budget, p_irrationality=0.5):
 
         self.irrationality = np.random.uniform(-p_irrationality, p_irrationality)
         self.budget = budget
-
         self.name = self._generate_id()
-
         self.num_items_bought = 0
+        self.history = []
+
 
     def roulette(self, eval_items, available_budget):
         chosen_item = []
@@ -102,7 +116,6 @@ class Bidder(object):
     def _generate_id(self, n=6  , chars=ascii_uppercase):
         return "".join(random.choice(chars) for i in range(n))
 
-
 class Auction_Items(object):
 
     def __init__(self):
@@ -121,12 +134,11 @@ class Auction_Items(object):
         return s
 
     def get_best_eval(self, bidders):
-        bidders.sort(key=lambda x : x.private_eval[self.name], reverse=True)
+        bi = bidders.copy()
+        bi.sort(key=lambda x : x.private_eval[self.name], reverse=True)
 
-        self.highest_eval = bidders[0].private_eval[self.name]
-        self.second_highest_eval = bidders[1].private_eval[self.name]
-
-
+        self.highest_eval = bi[0].private_eval[self.name]
+        self.second_highest_eval = bi[1].private_eval[self.name]
 
 def english_auction(bidders, Auction_Items, initial_bid, incremental_bid):
 
@@ -155,55 +167,78 @@ def english_auction(bidders, Auction_Items, initial_bid, incremental_bid):
             asking_price += incremental_bid
 
 
+def main(bidders, num_items, budget, initial_bid, incremental_bid):
 
-def main(num_items, num_bidders, budget):
+    #Generate new items for auction
+    auc_items = [Auction_Items() for _ in range(num_items)]
 
-    num_iter = 100
-    initial_bid = 10
-    incremental_bid = 1
+    #For Each bidder set privte eval
+    for bidder in bidders:
+        bidder.set_private_eval(auc_items)
 
+    #For each item find best evaluation
+    for it in auc_items:
+        it.get_best_eval(bidders)
 
-    bidders = [Bidder(budget) for _ in range(num_bidders)]
+    #For each bidder generate a list of items to bid on
+    for bidder in bidders:
+        bidder.chosen_item = bidder.roulette(bidder.private_eval.copy(), bidder.budget)
 
-    fig = plt.figure()
+    #Play english auction
+    english_auction(bidders, auc_items, initial_bid, incremental_bid)
 
-    for i in range(num_iter):
-
-        #Generate new items
-        auc_items = [Auction_Items() for _ in range(num_items)]
-
-        #For each bidder set private eval:
-        for bidder in bidders:
-            bidder.set_private_eval(auc_items)
-
-        #For each item find best evaluation
-        for it in auc_items:
-            it.get_best_eval(bidders)
-
-        #For each bidder generate a lsit of item to bid on
-        for bidder in bidders:
-            bidder.chosen_item = bidder.roulette(bidder.private_eval.copy(), bidder.budget)
+    for bidder in bidders:
+        bidder.history.append(bidder.budget)
 
 
-        #Play English auction
-        english_auction(bidders, auc_items, initial_bid, incremental_bid)
+##Generate a  fix set of bidders
+bidders = [Bidder(budget) for _ in range(num_bidders)]
 
-        #reset budget:
-        for bidder in bidders:
-            print("\t {} \t{:10.2f} \t{:4.2f} \t{}".format(bidder.name, bidder.budget,
-                bidder.irrationality, bidder.num_items_bought))
+fig = plt.figure()
+ax = plt.axes(xlim=(0, 100), ylim=(0, 400))
 
 
-        for bidder in bidders:
-            plt.plot(i, bidder.budget)#, label=bidder.irrationality)
+lines = []
 
-        plt.pause(0.05)
-        #plt.legend()
-        print("-------------------")
-    plt.show()
-if __name__ == "__main__":
-    num_bidders = 20
-    num_items = 5
-    budget = 350
+for i, bidder in enumerate(bidders):
+    lb = "{} {:.2f}".format(bidder.name, bidder.irrationality)
+    line, = ax.plot([], [], lw = 2, label=lb)
+    lines.append(line)
 
-    main(num_items, num_bidders, budget)
+plt.legend(loc='upper left', ncol=5)
+
+def init():
+
+    for line in lines:
+        line.set_data([],[])
+    return lines
+
+
+def animate(i):
+
+    main(bidders, num_items, budget, initial_bid, incremental_bid)
+    n = len(bidders[0].history)
+    x = list(range(0, n))
+
+    max_y = 0
+    for line, bidder in zip(lines, bidders):
+        line.set_data(x, bidder.history)
+
+        if bidder.budget > max_y:
+            max_y = bidder.budget
+
+    if max_y > ax.get_ylim()[1]:
+        ax.set_ylim(0, max_y + 250)
+    if i > ax.get_xlim()[1]:
+        ax.set_xlim(0, i + 100)
+
+
+
+
+    return lines
+
+ani = FuncAnimation(fig, animate,
+                    interval = 100, init_func=init)
+
+plt.tight_layout()
+plt.show()
