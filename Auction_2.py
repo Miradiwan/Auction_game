@@ -2,7 +2,7 @@ import numpy as np
 import random
 from string import ascii_uppercase
 import matplotlib.pyplot as plt
-
+from matplotlib.animation import FuncAnimation
 
 '''
     # TODO:
@@ -12,20 +12,14 @@ import matplotlib.pyplot as plt
 '''
 class Bidder(object):
 
-    def __init__(self, budget, auction_Items, lower_eval = 10,
-            upper_eval= 150, p_irrationality=0.45):
+    def __init__(self, budget, p_irrationality=0.5):
 
-        self.private_eval = dict()
-
-        for it in auction_Items:
-            self.private_eval[it.name] = np.random.uniform(lower_eval, upper_eval)
-
-        self.irrationality = np.random.uniform(0, p_irrationality)
+        self.irrationality = np.random.uniform(-p_irrationality, p_irrationality)
         self.budget = budget
 
         self.name = self._generate_id()
 
-        self.chosen_items = self.roulette(self.private_eval.copy(), self.budget)
+        self.num_items_bought = 0
 
     def roulette(self, eval_items, available_budget):
         chosen_item = []
@@ -85,32 +79,22 @@ class Bidder(object):
         return item_prio
 
     def make_bid(self, item_name, asking_price):
-        """
-        Should return 1 if bidder is ready to make bidder
-        else return 0
-        """
-
 
         if item_name not in self.chosen_items:
             return False
-
-
-
-        if asking_price < self.private_eval[item_name]:
-            ## TODO: The bidder should also try to manage his budget
-            ## by prioritizing which item he whishes to buy
+        if asking_price < self.private_eval[item_name]*(1 + self.irrationality):
             return True
+        else:
+            return False
 
-        if asking_price > self.private_eval[item_name]:
-            #return False
+    def set_private_eval(self, auction_items, lower_bound = 20, upper_bound = 150):
 
-            r = np.random.uniform()
+        self.private_eval = dict()
 
-            if r < self.irrationality:
-                return True
-            else:
-                return False
+        for it in auction_items:
+            self.private_eval[it.name] = np.random.uniform(lower_bound, upper_bound)
 
+        self.chosen_items = self.roulette(self.private_eval.copy(), self.budget)
 
     def __repr__(self):
         return repr((self.irrationality, self.budget))
@@ -118,14 +102,15 @@ class Bidder(object):
     def _generate_id(self, n=6  , chars=ascii_uppercase):
         return "".join(random.choice(chars) for i in range(n))
 
+
 class Auction_Items(object):
 
     def __init__(self):
 
         self.name       = self._generate_id()
-        self.sold_to    = None     # indicates which biddeer bought the item
-        self.solf_for   = None    # The price the item was sold for
-        self.highest_eval = 0   # The maximal evaluation of this object by any bidder
+        self.sold_to    = None      # indicates which biddeer bought the item
+        self.solf_for   = None      # The price the item was sold for
+        self.highest_eval = 0       # The maximal evaluation of this object by any bidder
         self.second_highest_eval = 0
 
     def __repr__(self):
@@ -138,9 +123,10 @@ class Auction_Items(object):
     def get_best_eval(self, bidders):
         bidders.sort(key=lambda x : x.private_eval[self.name], reverse=True)
 
-
         self.highest_eval = bidders[0].private_eval[self.name]
         self.second_highest_eval = bidders[1].private_eval[self.name]
+
+
 
 def english_auction(bidders, Auction_Items, initial_bid, incremental_bid):
 
@@ -159,70 +145,64 @@ def english_auction(bidders, Auction_Items, initial_bid, incremental_bid):
                     it.sold_to  = still_bidding[0]
                     it.sold_for = asking_price
 
-                    still_bidding[0].budget -= asking_price
+                    payoff = still_bidding[0].private_eval[it.name] - asking_price
+                    still_bidding[0].budget += payoff
+
+                    still_bidding[0].num_items_bought += 1
                     break
 
 
             asking_price += incremental_bid
 
+
+
 def main(num_items, num_bidders, budget):
 
-    auc_items = [Auction_Items() for _ in range(num_items)]
-
-    bidders = [Bidder(budget, auc_items) for _ in range(num_bidders)]
-
-    for it in auc_items:
-        it.get_best_eval(bidders)
+    num_iter = 100
+    initial_bid = 10
+    incremental_bid = 1
 
 
+    bidders = [Bidder(budget) for _ in range(num_bidders)]
 
-    english_auction(bidders, auc_items, 10, 0.5)
-    sold_for = []
+    fig = plt.figure()
 
-    """
-    for i in range(500):
+    for i in range(num_iter):
+
+        #Generate new items
+        auc_items = [Auction_Items() for _ in range(num_items)]
+
+        #For each bidder set private eval:
+        for bidder in bidders:
+            bidder.set_private_eval(auc_items)
+
+        #For each item find best evaluation
+        for it in auc_items:
+            it.get_best_eval(bidders)
+
+        #For each bidder generate a lsit of item to bid on
         for bidder in bidders:
             bidder.chosen_item = bidder.roulette(bidder.private_eval.copy(), bidder.budget)
 
-        english_auction(bidders, auc_items, 10, 0.5)
 
-        pr = 0
-        for it in auc_items:
-            pr += it.sold_for
-            it.sold_to = None
-            it.solf_for = 0
-        sold_for.append(pr)
+        #Play English auction
+        english_auction(bidders, auc_items, initial_bid, incremental_bid)
 
-
-    shb = 0
-    hb  = 0
-    for it in auc_items:
-        shb += it.second_highest_eval
-        hb  += it.highest_eval
+        #reset budget:
+        for bidder in bidders:
+            print("\t {} \t{:10.2f} \t{:4.2f} \t{}".format(bidder.name, bidder.budget,
+                bidder.irrationality, bidder.num_items_bought))
 
 
-    print("Average Income: {}, Second highest bid {}".format(sum(sold_for)/len(sold_for), shb))
+        for bidder in bidders:
+            plt.plot(i, bidder.budget)#, label=bidder.irrationality)
 
-    plt.plot(sold_for, label = "Income each round", color='black')
-    plt.hlines(y=shb, xmin=0, xmax=500,colors='red', label = "Sum of the second highest evals")
-    plt.hlines(y=hb, xmin=0, xmax=500, colors = 'blue', label = "Sum of the highest eval")
-    plt.legend()
-    #plt.show()
-    plt.savefig("plot.pdf")
-
-    """
-
-    for it in auc_items:
-        print(it.name, it.sold_to.name, it.highest_eval, it.sold_for, it.second_highest_eval)
-
-    for bidder in bidders:
-        print(bidder.name)
-        print(bidder.chosen_items)
-        print(bidder.private_eval)
-
-
+        plt.pause(0.05)
+        #plt.legend()
+        print("-------------------")
+    plt.show()
 if __name__ == "__main__":
-    num_bidders = 10
+    num_bidders = 20
     num_items = 5
     budget = 350
 
