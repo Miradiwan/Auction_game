@@ -4,6 +4,8 @@ from string import ascii_uppercase
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from itertools import count
+from matplotlib import cm
+import argparse
 
 '''
     # TODO:
@@ -11,18 +13,23 @@ from itertools import count
     Add multiple round logic
     Change object for each round ??
 '''
+#######################------Argumnet Parser-------------######################
+parser = argparse.ArgumentParser()
+parser.add_argument("-A", "--auctionType", help = "Type of Auction either dutch or English", default="Englih")
 
-plt.style.use('fivethirtyeight')
+args = parser.parse_args()
+auction_type = args.auctionType
 
+######################---------Argumnet Parser----------#######################
 
-#-------Global Variabls-------------#
-num_bidders = 10
+#######################-------Global Variabls-------------#####################
+num_bidders = 15
 num_items = 5
 budget = 200
 num_iter = 100
-initial_bid = 10
+init_bid = 10
 incremental_bid = 1
-#-----Global Variabls----------------#
+#####################---------Global Variabls----------------###################
 
 class Bidder(object):
 
@@ -150,7 +157,7 @@ def english_auction(bidders, Auction_Items, initial_bid, incremental_bid):
             for bidder in still_bidding:
                 bid = bidder.make_bid(it.name, asking_price)
 
-                if bid == 0:
+                if bid == False:
                     still_bidding.remove(bidder)
 
                 if len(still_bidding) == 1:
@@ -167,7 +174,32 @@ def english_auction(bidders, Auction_Items, initial_bid, incremental_bid):
             asking_price += incremental_bid
 
 
-def main(bidders, num_items, budget, initial_bid, incremental_bid):
+def dutch_auction(bidders, Auction_items, initial_bid, inc_bid):
+
+    #Iterate over each item
+    for it in Auction_items:
+
+        asking_price = initial_bid
+
+        #As long the item is not sold
+        while not it.sold_to:
+
+            for bidder in bidders:
+                bid = bidder.make_bid(it.name, asking_price)
+
+                if bid == True:
+                    it.sold_to = bidder
+                    it.sold_for = asking_price
+
+                    payoff = bidder.private_eval[it.name] - asking_price
+                    bidder.budget += payoff
+
+                    bidder.num_items_bought += 1
+
+            asking_price -= inc_bid
+
+
+def main(auction_type = 'English'):
 
     #Generate new items for auction
     auc_items = [Auction_Items() for _ in range(num_items)]
@@ -185,7 +217,11 @@ def main(bidders, num_items, budget, initial_bid, incremental_bid):
         bidder.chosen_item = bidder.roulette(bidder.private_eval.copy(), bidder.budget)
 
     #Play english auction
-    english_auction(bidders, auc_items, initial_bid, incremental_bid)
+    if auction_type == "English":
+        english_auction(bidders, auc_items, init_bid, incremental_bid)
+
+    elif auction_type == 'Dutch':
+        dutch_auction(bidders, auc_items, 1000, incremental_bid)
 
     for bidder in bidders:
         bidder.history.append(bidder.budget)
@@ -194,18 +230,30 @@ def main(bidders, num_items, budget, initial_bid, incremental_bid):
 ##Generate a  fix set of bidders
 bidders = [Bidder(budget) for _ in range(num_bidders)]
 
+
+###################set up the plot###################
+viridis = cm.get_cmap('gist_rainbow', 40)
+colours = viridis(np.linspace(0,1,num_bidders))
+
+line_styes = ['solid', 'dashed', 'dashdot', 'dotted']
+
 fig = plt.figure()
 ax = plt.axes(xlim=(0, 100), ylim=(0, 400))
 
 
 lines = []
 
-for i, bidder in enumerate(bidders):
+for ic, bidder in zip(colours, bidders):
+
     lb = "{} {:.2f}".format(bidder.name, bidder.irrationality)
-    line, = ax.plot([], [], lw = 2, label=lb)
+    line, = ax.plot([], [], lw = 2, label=lb, color=ic, ls = random.choice(line_styes))
     lines.append(line)
 
+
 plt.legend(loc='upper left', ncol=5)
+plt.title(auction_type + " Auction")
+
+#########---------------------Set up the plot-------------------------########
 
 def init():
 
@@ -213,19 +261,23 @@ def init():
         line.set_data([],[])
     return lines
 
-
 def animate(i):
 
-    main(bidders, num_items, budget, initial_bid, incremental_bid)
+    main(auction_type)
     n = len(bidders[0].history)
     x = list(range(0, n))
 
     max_y = 0
+
+
     for line, bidder in zip(lines, bidders):
+
+
         line.set_data(x, bidder.history)
 
         if bidder.budget > max_y:
             max_y = bidder.budget
+
 
     if max_y > ax.get_ylim()[1]:
         ax.set_ylim(0, max_y + 250)
@@ -237,8 +289,8 @@ def animate(i):
 
     return lines
 
-ani = FuncAnimation(fig, animate,
-                    interval = 100, init_func=init)
+ani = FuncAnimation(fig, animate, frames= 300,
+                    interval = 100, init_func=init, repeat=False)
 
-plt.tight_layout()
+#plt.ion()
 plt.show()
