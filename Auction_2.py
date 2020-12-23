@@ -7,12 +7,7 @@ from itertools import count
 from matplotlib import cm
 import argparse
 
-'''
-    # TODO:
-    Add Dutch auction
-    Add multiple round logic
-    Change object for each round ??
-'''
+
 #######################------Argumnet Parser-------------######################
 parser = argparse.ArgumentParser()
 parser.add_argument("-A", "--auctionType", help = "Type of Auction either dutch or English", default="Englih")
@@ -23,7 +18,7 @@ auction_type = args.auctionType
 ######################---------Argumnet Parser----------#######################
 
 #######################-------Global Variabls-------------#####################
-num_bidders = 100
+num_bidders = 20
 num_items = 5
 budget = 200
 num_iter = 100
@@ -33,15 +28,15 @@ incremental_bid = 1
 
 class Bidder(object):
 
-    def __init__(self, budget, p_irrationality=0.5):
+    def __init__(self, budget, irr_factor, prio_bool,  p_irrationality=0.5):
 
-        self.irrationality = np.random.uniform(-p_irrationality, p_irrationality)
+        self.irrationality = irr_factor  #np.random.uniform(-p_irrationality, p_irrationality)
         self.budget = budget
         self.name = self._generate_id()
         self.num_items_bought = 0
         self.history = []
 
-        self.prio_bool = random.choice([True, False])
+        self.prio_bool = prio_bool #random.choice([True, False])
 
     def roulette(self, eval_items, available_budget):
 
@@ -235,35 +230,43 @@ def main(auction_type = 'English'):
 
 
 ##Generate a  fix set of bidders
-bidders = [Bidder(budget) for _ in range(num_bidders)]
+#bidders = [Bidder(budget) for _ in range(num_bidders)]
+
+irr_factor = np.linspace(-0.5, 0.5, num_bidders//2)
+
+bidders = [Bidder(budget, irr_factor[ix], True) for ix in range(num_bidders//2)]
+bidders_2 = [Bidder(budget, irr_factor[ix], False) for ix in range(num_bidders//2)]
+
+bidders.extend(bidders_2)
 
 
 ###################set up the plot###################
+"""
 viridis = cm.get_cmap('gist_rainbow', 40)
 colours = viridis(np.linspace(0,1,num_bidders))
 
 line_styes = ['solid', 'dashed', 'dashdot', 'dotted']
 
-fig = plt.figure()
-ax = plt.axes(xlim=(0, 100), ylim=(0, 400))
+fig = plt.figure(figsize=(6, 6), dpi = 80)
+ax = plt.axes(xlim=(0, 100), ylim=(0, 1600))
 
 
 lines = []
 
 for ic, bidder in zip(colours, bidders):
 
-    lb = "Prio={}, irr={:.2f}".format(bidder.prio_bool, bidder.irrationality)
+    lb = "P={}, i={:.2f}".format('T' if int(bidder.prio_bool) == 1 else 'F', bidder.irrationality)
     line, = ax.plot([], [], lw = 2, label=lb, color=ic, ls = random.choice(line_styes))
     lines.append(line)
 
 
-plt.legend(loc='upper left', ncol=5)
+plt.legend(loc = 'upper left', ncol=9, bbox_to_anchor =(0, 1))
 plt.title(auction_type + " Auction")
 plt.xlabel("Itterations")
 plt.ylabel("Budget")
 
 
-
+"""
 #########---------------------Set up the plot-------------------------########
 
 def init():
@@ -300,37 +303,46 @@ def animate(i):
 
     return lines
 
-ani = FuncAnimation(fig, animate, frames= 300,
-                    interval = 100, init_func=init, repeat=False)
-
-
-
-plt.show()
+#ani = FuncAnimation(fig, animate, frames= 300,
+#                    interval = 100, init_func=init, repeat=False)
+#plt.show()
 
 
 dt = np.zeros((num_bidders, 3))
 
+num_iterations = 20
+
+
+for j in range(num_iterations):
+    for i in range (300):
+        main(auction_type=auction_type)
+
+    for idx, bidder in enumerate(bidders):
+        dt[idx,0] += bidder.history[-1]
+        dt[idx,1] = bidder.irrationality
+        dt[idx,2] = bidder.prio_bool
+        bidder.budget = budget
+        bidder.num_items_bought = 0
+    print(j)
+
 fig3, ax3 = plt.subplots()
 
-for idx, bidder in enumerate(bidders):
-    dt[idx,0] = bidder.history[-1]
-    dt[idx,1] = bidder.irrationality
-    dt[idx,2] = bidder.prio_bool
+
 
 cdict = {False: "red", True: "blue"}
 
 for g in np.unique(dt[:,2]):
-    lb = "No prio" if g == False else "prio"
+    lb = "No priority list" if g == False else "priority list"
     ix = np.where(dt == g)
-    ax3.scatter(dt[ix,1], dt[ix,0], c = cdict[g], label = lb, s = 25)
+    ax3.scatter(dt[ix,1], dt[ix,0]/num_iterations, c = cdict[g], label = lb, s = 25)
 
     a = dt[ix[0],:]
     a = a[a[:,1].argsort()]
-    ax3.plot(a[:,1], a[:,0], color=cdict[g], ls = 'dashed')
-#dt = dt[dt[:,1].argsort()]
-#ax3.plot(dt[:,1], dt[:,0], color='black', ls='dashed')
+    ax3.plot(a[:,1], a[:,0]/num_iterations, color=cdict[g], ls = 'dashed')
+
+
 ax3.legend()
-plt.title(auction_type + " Auction")
+plt.title("{} Auction. Bidders = {}, items = {}. Averaged over {} runs".format(auction_type, num_bidders, num_items, num_iterations))
 plt.ylabel("Budget")
 plt.xlabel("irrationality factor")
 plt.show()
