@@ -23,7 +23,7 @@ auction_type = args.auctionType
 ######################---------Argumnet Parser----------#######################
 
 #######################-------Global Variabls-------------#####################
-num_bidders = 15
+num_bidders = 100
 num_items = 5
 budget = 200
 num_iter = 100
@@ -41,9 +41,15 @@ class Bidder(object):
         self.num_items_bought = 0
         self.history = []
 
+        self.prio_bool = random.choice([True, False])
 
     def roulette(self, eval_items, available_budget):
+
         chosen_item = []
+
+        if self.prio_bool == False:
+            return list(eval_items.keys())
+
 
         priv_items = self.prioritize_item(eval_items)
 
@@ -67,7 +73,6 @@ class Bidder(object):
                     if available_budget - self.private_eval[k] < 0:
                         break
 
-                    #print("prob r : {:.2f} s : {:.2f} v : {:.2f}".format(r,s,v))
                     eval_items.pop(k, None)
                     priv_items = self.prioritize_item(eval_items)
 
@@ -101,6 +106,8 @@ class Bidder(object):
 
     def make_bid(self, item_name, asking_price):
 
+        if self.budget < 0:
+            return False
         if item_name not in self.chosen_items:
             return False
         if asking_price < self.private_eval[item_name]*(1 + self.irrationality):
@@ -245,13 +252,17 @@ lines = []
 
 for ic, bidder in zip(colours, bidders):
 
-    lb = "{} {:.2f}".format(bidder.name, bidder.irrationality)
+    lb = "Prio={}, irr={:.2f}".format(bidder.prio_bool, bidder.irrationality)
     line, = ax.plot([], [], lw = 2, label=lb, color=ic, ls = random.choice(line_styes))
     lines.append(line)
 
 
 plt.legend(loc='upper left', ncol=5)
 plt.title(auction_type + " Auction")
+plt.xlabel("Itterations")
+plt.ylabel("Budget")
+
+
 
 #########---------------------Set up the plot-------------------------########
 
@@ -292,5 +303,34 @@ def animate(i):
 ani = FuncAnimation(fig, animate, frames= 300,
                     interval = 100, init_func=init, repeat=False)
 
-#plt.ion()
+
+
+plt.show()
+
+
+dt = np.zeros((num_bidders, 3))
+
+fig3, ax3 = plt.subplots()
+
+for idx, bidder in enumerate(bidders):
+    dt[idx,0] = bidder.history[-1]
+    dt[idx,1] = bidder.irrationality
+    dt[idx,2] = bidder.prio_bool
+
+cdict = {False: "red", True: "blue"}
+
+for g in np.unique(dt[:,2]):
+    lb = "No prio" if g == False else "prio"
+    ix = np.where(dt == g)
+    ax3.scatter(dt[ix,1], dt[ix,0], c = cdict[g], label = lb, s = 25)
+
+    a = dt[ix[0],:]
+    a = a[a[:,1].argsort()]
+    ax3.plot(a[:,1], a[:,0], color=cdict[g], ls = 'dashed')
+#dt = dt[dt[:,1].argsort()]
+#ax3.plot(dt[:,1], dt[:,0], color='black', ls='dashed')
+ax3.legend()
+plt.title(auction_type + " Auction")
+plt.ylabel("Budget")
+plt.xlabel("irrationality factor")
 plt.show()
